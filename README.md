@@ -1,11 +1,28 @@
-# Islands Farm Bot v20 🏝️
+# Islands Farm Bot v21 🏝️🔒
 
-Automated farming bot for [islands.games](https://islands.games) — headless Playwright-based with anti-ban system.
+Automated farming bot for [islands.games](https://islands.games) — headless Playwright-based with **secure signing architecture** and anti-ban system.
+
+## 🔒 Security (v21)
+
+**Private key NEVER enters browser JavaScript.** All signing happens server-side in Python via `page.route()` bridge.
+
+```
+v18-v20 (INSECURE):          v21 (SECURE):
+Browser JS ← full key        Browser JS ← public key only
+Key in closure (leaked)      Key in Python memory only
+GitHub = wallet drained      GitHub = safe (no key material)
+```
+
+- Browser only has **public key** (32 bytes = wallet address)
+- `signMessage` → fetch `http://sign.local/sign` → Python signs with `nacl` → returns signature
+- Even if repo leaks, attacker gets **zero key material**
+- Vault file has `chmod 600` (root-only read)
 
 ## Features
 
 - 🌲 **Tree + Gold farming** — auto-detects resources from world data, cycles between them
 - 🛡️ **Anti-ban system** — randomized timing, humanized movement, AFK simulation, chat messages
+- 🔒 **Secure signing** — private key in Python only, never in browser
 - ⚔️ **Auto-attack** — randomized 1-3 hits per tick with position jitter
 - 📊 **Auto-allocate** — STR stat points on level up
 - 💀 **Auto-revive** — instant revive on death
@@ -29,14 +46,17 @@ Automated farming bot for [islands.games](https://islands.games) — headless Pl
 
 - Python 3.10+
 - Playwright (`pip install playwright && playwright install chromium`)
-- Phantom wallet private key (Solana)
+- PyNaCl (`pip install pynacl`)
+- Solana wallet JSON file (see below)
 
 ## Setup
 
 1. Clone the repo
-2. Place your wallet JSON at `~/.hermes/profiles/alon/vault/wallets/solana_main.json`
-3. Ensure `tweetnacl.min.js` is in the same directory
+2. Install dependencies: `pip install playwright pynacl && playwright install chromium`
+3. Place your wallet JSON at the path configured in `WALLET_FILE` (default: `~/.hermes/profiles/alon/vault/wallets/solana_main.json`)
 4. Run: `python3 farm.py`
+
+**⚠️ NEVER commit your wallet file to git.** The vault path is gitignored by default.
 
 ## Wallet Format
 
@@ -46,6 +66,9 @@ Automated farming bot for [islands.games](https://islands.games) — headless Pl
   "private_key_bytes": [1, 2, 3, ...]
 }
 ```
+
+- `private_key_bytes`: 64-byte Ed25519 keypair (seed + public key)
+- File must have `chmod 600` permissions
 
 ## Running as Service
 
@@ -59,13 +82,46 @@ journalctl -u islands-bot -f
 ## How It Works
 
 1. Launches headless Chromium via Playwright
-2. Injects wallet + WebSocket hook before page loads
-3. Connects wallet to islands.games
-4. Intercepts game WebSocket messages (loot, inventory, xp, world data)
-5. Auto-detects tree/gold positions from `world.treeHits` / `world.goldHits`
-6. Sends humanized attack + movement commands via WS
-7. Rotates between trees and golds every 45-120s
-8. Auto-revives, allocates stats, reconnects on session timeout
+2. Injects **public key only** + WebSocket hook before page loads
+3. Registers `page.route('http://sign.local/sign')` — Python handles all signing
+4. Connects wallet to islands.games (game sees valid Phantom wallet)
+5. Intercepts game WebSocket messages (loot, inventory, xp, world data)
+6. Auto-detects tree/gold positions from `world.treeHits` / `world.goldHits`
+7. Sends humanized attack + movement commands via WS
+8. Rotates between trees and golds every 45-120s
+9. Auto-revives, allocates stats, reconnects on session timeout
+
+## Architecture
+
+```
+┌─────────────────────────────────────────┐
+│  Python Process                         │
+│  ┌─────────────────────────────────┐    │
+│  │ Private Key (nacl.SigningKey)   │    │
+│  │ NEVER exported to JS            │    │
+│  └──────────┬──────────────────────┘    │
+│             │ page.route() bridge       │
+│  ┌──────────▼──────────────────────┐    │
+│  │ POST http://sign.local/sign     │    │
+│  │ {message: base64} → {signature} │    │
+│  └──────────┬──────────────────────┘    │
+│             │                           │
+│  ┌──────────▼──────────────────────┐    │
+│  │ Playwright Browser              │    │
+│  │ • Public key only               │    │
+│  │ • WebSocket hook                │    │
+│  │ • Anti-ban behavior             │    │
+│  │ • Game farming logic            │    │
+│  └─────────────────────────────────┘    │
+└─────────────────────────────────────────┘
+```
+
+## Changelog
+
+- **v21**: Secure signing architecture — key never enters browser JS
+- **v20**: Anti-ban system (randomized timing, AFK, chat, session rotation)
+- **v19**: Dynamic tree + gold detection from world data
+- **v18**: Tree-targeting attack loop with auto-allocate
 
 ## Disclaimer
 
