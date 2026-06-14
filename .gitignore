@@ -14,3 +14,15 @@ __pycache__/
 # Old versions (keep only latest)
 farm_v[0-9].py
 farm_v1[0-8].py
+
+# All old versioned farm scripts
+farm_v*.py
+farm_bot*.py
+farm_final.py
+farm_fixed.py
+farm_main.py
+headless_bot.py
+inject_wallet*.py
+islands_farm.py
+pw_bot*.py
+solana-web3.iife.js
