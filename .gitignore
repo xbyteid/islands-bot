@@ -1,0 +1,16 @@
+# Logs
+*.log
+farm_state.json
+browser_state.json
+
+# Debug screenshots
+*.png
+screenshots/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Old versions (keep only latest)
+farm_v[0-9].py
+farm_v1[0-8].py
